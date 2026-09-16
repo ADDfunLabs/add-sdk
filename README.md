@@ -1,8 +1,23 @@
 # ADD SDK
 
+[![ADD — Fixed price. Clear launch rules.](assets/brand/add-social-preview.png)](https://add.fun/)
+
 Official TypeScript / JavaScript SDK for the ADD.fun launch market on **BNB Smart Chain mainnet (56)**. Version **0.1.0**.
 
-Public documentation: https://add.fun/sdk/ · Platform: https://add.fun/ · Contact: https://x.com/ADDfunLabs
+[中文](README.zh-CN.md) · [How ADD works](docs/how-add-works.md) · [API documentation](https://add.fun/sdk/reference.html) · [Release](https://github.com/ADDfunLabs/add-sdk/releases/tag/v0.1.0) · [Brand assets](assets/brand/)
+
+## About ADD.fun
+
+ADD is a BSC token launchpad with a **fixed exchange rate during the launch phase**, denominated in each token's selected fundraising asset. More buys advance the launch toward its target without moving up a rising launch-price curve.
+
+- **1 BNB current default target**, with custom targets available to creators. Existing token targets remain fixed.
+- **BNB, USDT and compatible custom fundraising assets**, with BNB payments and proceeds at the launch Portal.
+- **Automatic graduation to PancakeSwap V2** when the launch meets its target; all LP tokens received by ADD go to the dead address.
+- **Standard zero-transfer-tax and post-graduation tax mechanisms**, with their fees and permissions explained in the [platform overview](docs/how-add-works.md).
+
+Fixed pricing applies in the fundraising asset. Conversion rates and post-graduation prices can move. The non-upgradeable Portal retains owner management and emergency recovery powers; read the [permission disclosure](https://add.fun/docs/en/permissions/).
+
+Official links: [Website](https://add.fun/) · [Platform docs](https://add.fun/docs/en/) · [SDK docs](https://add.fun/sdk/) · [X](https://x.com/ADDfunLabs) · [Telegram](https://t.me/ADD_FU)
 
 ## Install
 
@@ -10,7 +25,9 @@ Public documentation: https://add.fun/sdk/ · Platform: https://add.fun/ · Cont
 npm install https://add.fun/sdk/releases/add-fun-sdk-0.1.0.tgz
 ```
 
-The package name is `@add-fun/sdk`. This release is distributed by the official website; that name alone does **not** mean the package is available on the npm registry. Both ESM and CommonJS, TypeScript declarations, source and examples are included. Node.js 20+ or a modern browser bundler with BigInt support is required. The only runtime dependency is ethers v6.
+The package name is `@add-fun/sdk`. Version 0.1.0 is available from the official website and [GitHub Releases](https://github.com/ADDfunLabs/add-sdk/releases/tag/v0.1.0); it is not yet published on the npm registry. Both ESM and CommonJS, TypeScript declarations, source and examples are included. Node.js 20+ or a modern browser bundler with BigInt support is required. The only runtime dependency is ethers v6.
+
+The published v0.1.0 package and tag are immutable release snapshots. Repository documentation and brand assets may advance independently on `main`; this documentation update does not replace the released archive.
 
 ## Read a token and quote a buy
 
@@ -116,3 +133,7 @@ npm pack
 ```
 
 In a standalone extracted package, the commands above install development dependencies and rebuild/test the included source. In the ADD monorepo use the committed lockfile with `npm ci --ignore-scripts`; `node scripts/sync-sdk.cjs --check` checks interface/catalog drift. The monorepo also executes SDK-generated transactions against its real Solidity contracts on a local EVM. Real wallet submission and independent third-party audit are separate activities.
+
+## License and brand
+
+SDK code and explanatory documentation are provided under the [MIT license](LICENSE). The ADD name and artwork follow the separate [brand asset notice](assets/brand/LICENSE). This public repository contains the SDK, documentation and official brand assets; platform application source, full contract source, deployment configuration and credentials are not included.

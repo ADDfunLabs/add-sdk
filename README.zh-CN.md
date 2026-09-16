@@ -1,6 +1,23 @@
 # ADD 独立 SDK 0.1.0
 
+[![ADD — 固定兑换比例，清晰发行规则](assets/brand/add-social-preview.png)](https://add.fun/)
+
 面向 GMGN、钱包、行情终端和机器人开发者的官方 TypeScript / JavaScript 工具包，仅支持 BSC 主网（56）。英文完整接口文档见同包 README.md，官网 https://add.fun/sdk/ 。
+
+[English](README.md) · [平台工作原理](docs/how-add-works.zh-CN.md) · [中文接入说明](https://add.fun/sdk/zh.html) · [版本下载](https://github.com/ADDfunLabs/add-sdk/releases/tag/v0.1.0) · [官方品牌素材](assets/brand/)
+
+## 关于 ADD.fun
+
+ADD 是使用**内盘固定兑换比例**的 BSC 代币发射平台。相对所选募集资产，更多买入推进募集进度，不会让内盘价格沿上涨曲线提高。
+
+- 当前默认毕业目标为 **1 BNB**，创建者可自定义；已创建代币的目标保持固定。
+- 支持 **BNB、USDT 及兼容自定义募集资产**，用户在内盘用 BNB 买入、卖出收取 BNB。
+- 达标后**自动添加 PancakeSwap V2 流动性**，ADD 获得的全部 LP 代币进入黑洞地址。
+- 提供**标准 0 转账税及毕业后税收机制**，费用和权限见[工作原理](docs/how-add-works.zh-CN.md)。
+
+固定价相对募集资产成立，BNB 兑换价格及毕业后价格可以波动。Portal 不可升级，但仍有业主管理与应急提取权限，详见[权限披露](https://add.fun/docs/zh/permissions/)。
+
+官方链接：[官网](https://add.fun/) · [平台文档](https://add.fun/docs/zh/) · [SDK](https://add.fun/sdk/) · [X](https://x.com/ADDfunLabs) · [Telegram](https://t.me/ADD_FU)
 
 ## 安装
 
@@ -8,7 +25,9 @@
 npm install https://add.fun/sdk/releases/add-fun-sdk-0.1.0.tgz
 ```
 
-代码中使用 `import { AddClient } from '@add-fun/sdk'`。支持 ESM、CommonJS 与 TypeScript 类型。当前从官网分发；包名不代表已在 npm 注册表上架。npm/GitHub 同步需另行完成账号发布。
+代码中使用 `import { AddClient } from '@add-fun/sdk'`。支持 ESM、CommonJS 与 TypeScript 类型。v0.1.0 已从官网和 [GitHub Releases](https://github.com/ADDfunLabs/add-sdk/releases/tag/v0.1.0) 发布，npm 注册表尚未上架。
+
+已经发布的 v0.1.0 安装包和标签保留原版本快照；`main` 分支上的介绍文档与品牌素材可单独更新，本次资料补充不会覆盖已发布安装包。
 
 ## 第一版能做什么
 
@@ -65,3 +84,7 @@ SDK 与模拟不能锁定库存和成交状态。当前共用 Portal 在已毕�
 第一版没有封装图片上传、CA 保留与签名、完整创建代币流程、管理员操作、税款/分红维护、毕业后 DEX 买卖。开发者可先接入发现、行情、内盘买卖与毕业识别；创建仍使用 ADD 官网。
 
 Portal 不可升级不代表取消平台管理权限；owner 仍可永久停池并提取储备。完整权限见 https://add.fun/docs/en/permissions/ 。测试通过和代码哈希核对不是第三方安全审计。
+
+## 许可证与品牌
+
+SDK 代码和说明文档使用 [MIT 许可证](LICENSE)。ADD 名称和图像遵循独立的[品牌素材说明](assets/brand/LICENSE)。本仓库只公开 SDK、说明文档和官方品牌素材，不包含平台网站源码、完整合约源码、部署配置或凭据。
