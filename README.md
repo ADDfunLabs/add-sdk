@@ -4,7 +4,7 @@
 
 Official TypeScript / JavaScript SDK for the ADD.fun launch market on **BNB Smart Chain mainnet (56)**. Version **0.1.0**.
 
-[中文](README.zh-CN.md) · [How ADD works](docs/how-add-works.md) · [API documentation](https://add.fun/sdk/reference.html) · [Release](https://github.com/ADDfunLabs/add-sdk/releases/tag/v0.1.0) · [Brand assets](assets/brand/)
+[中文](README.zh-CN.md) · [How ADD works](docs/how-add-works.md) · [API documentation](https://add.fun/sdk/reference.html) · [Release](https://github.com/ADDfunLabs/add-sdk/releases/tag/v0.1.0) · [Brand assets](assets/brand/) · [Token contract sources](https://github.com/ADDfunLabs/add-token-contracts)
 
 ## About ADD.fun
 

@@ -4,7 +4,7 @@
 
 面向 GMGN、钱包、行情终端和机器人开发者的官方 TypeScript / JavaScript 工具包，仅支持 BSC 主网（56）。英文完整接口文档见同包 README.md，官网 https://add.fun/sdk/ 。
 
-[English](README.md) · [平台工作原理](docs/how-add-works.zh-CN.md) · [中文接入说明](https://add.fun/sdk/zh.html) · [版本下载](https://github.com/ADDfunLabs/add-sdk/releases/tag/v0.1.0) · [官方品牌素材](assets/brand/)
+[English](README.md) · [平台工作原理](docs/how-add-works.zh-CN.md) · [中文接入说明](https://add.fun/sdk/zh.html) · [版本下载](https://github.com/ADDfunLabs/add-sdk/releases/tag/v0.1.0) · [官方品牌素材](assets/brand/) · [代币合约源码](https://github.com/ADDfunLabs/add-token-contracts)
 
 ## 关于 ADD.fun
 
