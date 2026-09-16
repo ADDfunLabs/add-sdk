@@ -1,0 +1,32 @@
+{
+  "name": "@add-fun/sdk",
+  "version": "0.1.0",
+  "description": "Official ADD.fun SDK for BSC launch-market discovery, quotes, unsigned trades and graduation events",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": { "types": "./dist/esm/index.d.ts", "default": "./dist/esm/index.js" },
+      "require": { "types": "./dist/cjs/index.d.ts", "default": "./dist/cjs/index.js" }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "src", "examples", "scripts", "test", "tsconfig.json", "README.md", "README.zh-CN.md", "CHANGELOG.md", "LICENSE"],
+  "sideEffects": false,
+  "engines": { "node": ">=20" },
+  "license": "MIT",
+  "author": "ADD.fun",
+  "homepage": "https://add.fun/sdk/",
+  "bugs": { "url": "https://x.com/ADDfunLabs" },
+  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org/" },
+  "scripts": {
+    "build": "node scripts/build.cjs",
+    "test": "npm run build && node --test test/*.test.cjs",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm test"
+  },
+  "dependencies": { "ethers": "^6.17.0" },
+  "devDependencies": { "typescript": "5.9.3" }
+}
