@@ -1,90 +1,143 @@
-# ADD 独立 SDK 0.1.0
+# ADD SDK 中文接入说明
 
-[![ADD — 固定兑换比例，清晰发行规则](assets/brand/add-social-preview.png)](https://add.fun/)
+**0.2.0** 支持当前新 V1 的 BSC、Ethereum 两条链，以及质押 V2、每币独立分红。提供 SDK 自身源码、TypeScript 类型、ESM、CommonJS 和示例。只读取链上数据、生成未签名交易，不保存私钥，不请求签名，不广播。
 
-面向 GMGN、钱包、行情终端和机器人开发者的官方 TypeScript / JavaScript 工具包，仅支持 BSC 主网（56）。英文完整接口文档见同包 README.md，官网 https://add.fun/sdk/ 。
+- BSC：chainId **56**，原生币 BNB，毕业进入 PancakeSwap V2。
+- Ethereum：chainId **1**，原生币 ETH，毕业进入 Uniswap V2。
+- 新 V1 用 `AddV1Client`；原 `AddClient` 保留旧 BSC v12/v13。不能只换地址复用旧 ABI。
 
-[English](README.md) · [平台工作原理](docs/how-add-works.zh-CN.md) · [中文接入说明](https://add.fun/sdk/zh.html) · [版本下载](https://github.com/ADDfunLabs/add-sdk/releases/tag/v0.1.0) · [官方品牌素材](assets/brand/) · [代币合约源码](https://github.com/ADDfunLabs/add-token-contracts)
-
-## 关于 ADD.fun
-
-ADD 是使用**内盘固定兑换比例**的 BSC 代币发射平台。相对所选募集资产，更多买入推进募集进度，不会让内盘价格沿上涨曲线提高。
-
-- 当前默认毕业目标为 **1 BNB**，创建者可自定义；已创建代币的目标保持固定。
-- 支持 **BNB、USDT 及兼容自定义募集资产**，用户在内盘用 BNB 买入、卖出收取 BNB。
-- 达标后**自动添加 PancakeSwap V2 流动性**，ADD 获得的全部 LP 代币进入黑洞地址。
-- 提供**标准 0 转账税及毕业后税收机制**，费用和权限见[工作原理](docs/how-add-works.zh-CN.md)。
-
-固定价相对募集资产成立，BNB 兑换价格及毕业后价格可以波动。Portal 不可升级，但仍有业主管理与应急提取权限，详见[权限披露](https://add.fun/docs/zh/permissions/)。
-
-官方链接：[官网](https://add.fun/) · [平台文档](https://add.fun/docs/zh/) · [SDK](https://add.fun/sdk/) · [X](https://x.com/ADDfunLabs) · [Telegram](https://t.me/ADD_FU)
+[平台文档](https://add.fun/docs/zh/) · [英文 API](https://add.fun/sdk/reference.html) · [GitHub](https://github.com/ADDfunLabs/add-sdk)
 
 ## 安装
 
+Node.js 20 以上。当前从官网和 GitHub 分发，**尚未发布到 npm 注册表**。
+
 ```sh
-npm install https://add.fun/sdk/releases/add-fun-sdk-0.1.0.tgz
+npm install https://add.fun/sdk/releases/add-fun-sdk-0.2.0.tgz
 ```
 
-代码中使用 `import { AddClient } from '@add-fun/sdk'`。支持 ESM、CommonJS 与 TypeScript 类型。v0.1.0 已从官网和 [GitHub Releases](https://github.com/ADDfunLabs/add-sdk/releases/tag/v0.1.0) 发布，npm 注册表尚未上架。
+对照 [发布清单](https://add.fun/sdk/release.json) 或包旁 `.sha256` 核验版本、SHA-256、npm integrity 和包内文件。可信合约绑定不能取自任意代币介绍。
 
-已经发布的 v0.1.0 安装包和标签保留原版本快照；`main` 分支上的介绍文档与品牌素材可单独更新，本次资料补充不会覆盖已发布安装包。
+## 快速使用
 
-## 第一版能做什么
-
-- 读取代币真实所属 Portal、阶段、募集资产、固定目标和储备进度，兼容当前三个正式 Portal。
-- 从链上读取买卖报价及当前默认目标，不把以后默认目标写死为 1 BNB。
-- 构造内盘买入、卖出、精确数量授权交易，由应用交给用户钱包签名。
-- 最后买满最多增加 3% 支付预算，保留完整剩余量的最低到账，按 Portal 报价核对退款。
-- 解析创建、买卖、非 BNB 募集结算、自动及手动毕业事件。
-- 返回官网代币详情与 PancakeSwap 链接。
-
-SDK 不保存钱包、不索取私钥、不自动签名或广播、不自动授权无限额度。金额使用 bigint。BNB 单位是 wei；募集资产和发行币各使用自己的精度。
-
-## 读取示例
-
-```js
+```ts
 import { JsonRpcProvider, parseEther } from 'ethers';
-import { AddClient } from '@add-fun/sdk';
-const provider = new JsonRpcProvider(process.env.BSC_RPC_URL);
-const add = new AddClient(provider);
-const token = '0x71be68c0bd800de27f1d48de4876215ed3c21111';
-const state = await add.readToken(token);
-if (state.phase === 'launch') {
-  const quote = await add.quoteBuy(token, parseEther('0.01'));
-  console.log(quote);
+import { AddV1Client } from '@add-fun/sdk';
+
+const add = new AddV1Client(new JsonRpcProvider(RPC_URL), { chainId: 56 });
+const token = await add.readToken(TOKEN_ADDRESS);
+if (token.phase === 'active' && token.reviewed) {
+  const quote = await add.quoteBuy(token.token, parseEther('0.01'));
+  const request = await add.buildTrade(quote, WALLET_ADDRESS, {
+    deadline: BigInt(quote.timestamp + 300), slippageBps: 50,
+  });
+  await add.simulate(request);
+  // 应用向钱包展示参数，用户确认后签名发送；SDK 不发交易。
 }
 ```
 
-使用开发者自己的 BSC 节点。不要依赖 ADD 网页代理承载第三方业务流量。
+ETH 使用 `{ chainId: 1 }` 和 ETH 节点。钱包连接、切链、确认和发送由应用负责。模拟只反映某个区块，不保证后续一定成交。
 
-## 钱包交易流程
+## 单位与报价
 
-1. 获取报价并展示给用户。
-2. `buildSwap(quote, account, {deadline: BigInt(quote.timestamp + 300)})` 生成交易，`simulate(tx)` 只做 eth_call 模拟。
-3. 应用让用户确认后，自己调用钱包的发送接口。SDK 不发送。
-4. 卖出前使用 `readAllowance` 检查授权；不足时先 `buildApproval`，用户确认授权成功后重新报价、模拟并确认卖出。
+所有金额用 `bigint` 最小单位，不用浮点数计算。BNB、ETH 为 18 位，发行币按自身精度，`reserve`、`quoteTarget` 按 `quoteDecimals`。两链 USDT 精度不能视为相同。目标/创建输入的 `ZeroAddress` 表示原生币；WBNB/WETH 是 ERC20，不是原生币授权对象。
 
-构造交易会重新核对链、Portal、阶段、报价区块和时效。普通买卖默认滑点 0.5%；买满的最低到账始终是完整剩余量。报价不能转成 JSON 再交回构造函数，也不能改字段；必须使用同一个 AddClient 返回的原始报价对象。默认允许报价最多 120 秒，截止时间最多在当前区块时间之后 15 分钟。
+关联调用固定同一编号区块并核验哈希。构建交易只接受**同一实例发出的原始冻结报价**，不能复制或 JSON 恢复后使用。区块时间超过 120 秒须重报；deadline 晚于当前区块且不超过 15 分钟。
 
-SDK 与模拟不能锁定库存和成交状态。当前共用 Portal 在已毕业时拒绝 ADD 内盘交易；旧 v12 Portal 若在打包前毕业，可能切换 DEX 路径并消耗全部预算，不能承诺这种情况下仍退款。
+普通滑点 `slippageBps` 为 0～1000 整数，默认 50，即 0.5%。剩余库存购买另有 0～300 BPS 付款缓冲，默认 3%。最后多付原生币由 Portal 退买家。构建时检查最新阶段、余额、授权和价格边界，保留原输入/最低输出，不会自动切去外盘。卖出/退款先确认精确数量授权，再重新读取并模拟后续交易。
 
-## 接入时要注意的业务区别
+## 公开接口
 
-- 内盘相对募集资产固定价，不代表 BNB/美元和毕业后市场价格不变。
-- 新币默认目标当前为 1 BNB，但可修改后续默认值、可自定义；读取每个币的锁定值。
-- 不同币可能属于不同的旧 Portal，不能统一给当前主池授权或交易。
-- `progressBps` 只在内盘返回数值；毕业后返回 null，判断毕业用 phase 和事件。管理员提前毕业不要求原进度 100%。
-- 1% 是内盘 BNB 平台费；税收币毕业后的代币税是另一套机制。
-- 钱包交易人按成功交易回执 from 确认，不只看 ERC20 转账发送方。
-- 字段 `ethAmount` 在非 BNB 募集毕业事件里可能代表募集资产数量，不能一律按 BNB 精度显示。
-- 日志解码不等于成功确认。接入方自己处理最终确认、重组、游标和幂等入库。
+### 新 V1 内盘
 
-## 尚未包含
+- `new AddV1Client(provider, { chainId, deployment? })`：显式选链，默认固化运行字节码、工厂和模板。完整自定义部署仅用于另行审核或本地测试，不接受任意用户元数据作为可信绑定。
+- `readToken(token, { blockTag? })`：名称、库存、募集资产/目标、储备、阶段、工厂/创建者/交易对、当前收费地址。未知外部池可以只读，资金操作拒绝未经审核的机制。
+- `getLaunchTarget(quoteAsset?, { targetNative?, blockTag? })`：当前目标与募集币数量，已创建项目仍用自己的锁定参数。
+- `quoteBuy`、`quoteSell`、`quoteRemainingBuy`、`quoteRefund`：买入输入原生币；卖出/退款输入发行币，退款输出原募集资产。
+- `buildTrade(quote, account, { deadline, slippageBps? })`：买、卖或退款；`buildSwap`、`buildRefund` 为专用入口。
+- `buildApproval(token, account, amount)`、`readAllowance(token, account, options?)`：向选定 Portal 授权指定数量并读取余额/授权。
+- `simulate(request)`：只模拟本实例生成且未改动的请求，不支付 Gas、不广播。
+- `decodePortalLog(log)`、`getPortalEvents(fromBlock, toBlock)`：固化 Portal 事件，单次最多 2000 个区块；节点可能要求更小范围。
 
-第一版没有封装图片上传、CA 保留与签名、完整创建代币流程、管理员操作、税款/分红维护、毕业后 DEX 买卖。开发者可先接入发现、行情、内盘买卖与毕业识别；创建仍使用 ADD 官网。
+### 税收和分红
 
-Portal 不可升级不代表取消平台管理权限；owner 仍可永久停池并提取储备。完整权限见 https://add.fun/docs/en/permissions/ 。测试通过和代码哈希核对不是第三方安全审计。
+- `readTax(token, options?)`：固定买卖税和四项分配、登记分红/矿池、门槛与待处理余额。
+- `buildProcessTaxes(token, account)`：毕业后公开处理入口，仍受门槛、价格和执行条件限制，不保证每次即时分发。
+- `readDividend(token, { account?, blockTag? })`：独立分红账本、奖励币、最低持币和个人可领。
+- `buildDividendClaim(token, gasPayer, { unwrapNative?, holder? })`：本人领取或替 holder 支付 Gas 领取；替领不能更换收款人，原生奖励以包装币给持有人。只有本人原生奖励领取可选择解包。
 
-## 许可证与品牌
+### 质押 V2
 
-SDK 代码和说明文档使用 [MIT 许可证](LICENSE)。ADD 名称和图像遵循独立的[品牌素材说明](assets/brand/LICENSE)。本仓库只公开 SDK、说明文档和官方品牌素材，不包含平台网站源码、完整合约源码、部署配置或凭据。
+- `readStakingPool(pool, { account?, blockTag? })`：核验工厂/精确 clone，查看资产、周期、产出、账户和本金锁仓。税入矿池未毕业时明确等待状态。
+- `readStakingPositions(pool, account, { offset?, limit?, blockTag? })`：分页查看独立质押批次。
+- `readStakingAllowance`、`buildStakingApproval`：`purpose: 'stake' | 'fund'` 区分本金/奖励，仅授权指定数量给核验矿池。原生币无需 ERC20 授权。
+- `buildStake(pool, account, amount, { minimumReceived? })`：本金按实际到账计算，可选最低到账默认 0。
+- `buildWithdraw(pool, account, amount, { receiver?, unwrapNative? })`：只取已解锁本金，本金不收平台费。
+- `buildStakingClaim(pool, account, { receiver?, wrappedReward? })`：奖励币扣固定 1% 维护费。
+- `buildCheckpoint(pool, account)`：同步新增循环奖励/关联激活。需要激活的池先确认 checkpoint，再重读最终 LP/奖励绑定后质押。
+- `previewAddRewards(pool, assumedReceived, 'extend' | 'recalculate', options?)`、`buildAddRewards(pool, account, amount, { mode?, minimumReceived? })`：按池类型追加预付/循环奖励。预计到账不是实际到账承诺。
+
+导出类型、`V1_DEPLOYMENTS` 和公开 ABI。使用 `*_ABIS[chainId]` 对应链字段，`*_ABI` 是 BSC 别名。业主、初始化和内部自调用写函数不纳入 SDK。裸 ABI 不等于完整托管创建流程。
+
+## 当前合约与机制
+
+- BSC 新 V1 Portal：`0x933bc9fe78c9beaedc5a82bd24b5359d01e8fd7b`，起始区块 `125996705`。默认参考 **4 BNB** 为此部署常量，没有修改默认目标函数。
+- ETH 新 V1 Portal：`0x5247dD1586923176bF92FeA99aadD21cEDDbA0e5`，起始区块 `26139958`。初始默认 **1 ETH**，业主能改后续新项目默认值。
+- 当前标准、税收、税入矿池工厂两链独立绑定；质押只接当前 V2，停用 V1 不是新建模板。
+
+Portal 按实际收到发行币一半募集、一半加池。兑换比例相对募集币固定；剩余未售库存严格小于接入总量 1% 时尝试毕业，使用实际募集资产，不必凑满参考目标。最后多付原生币退买家。内盘实际结算收 1% 原生币费用，0 转账税不免此费。
+
+毕业失败保留最后成交、暂停内盘并保护储备。任何人可重试原池；业主可尝试受报价界限保护的备用换池，或永久开启按比例交币退款，返原募集资产，已收交易费不退。业主只能提**未受保护多余资产**，不能提募集/退款储备；仍管理工厂准入、新建开关和业主交接。删除工厂不影响已登记项目。旧 v12/v13 权限不同。
+
+毕业后买卖税固定，钱包互转免税，税币累计后由符合条件的卖出/公开处理执行。税入矿池使用营销分配，不额外加第五项税。分红、质押奖励由用户领取；质押 V2 无业主、不可升级、无资产救援提取入口。[权限](https://add.fun/docs/zh/permissions/)。
+
+## 事件、旧版和边界
+
+新 V1 事件名/单位不同于旧 `BuyEvent`、`TokenSaleCreated`、`swapExactInput`，按链选 ABI，仅处理成功回执，按 `(chainId, transactionHash, logIndex)` 去重、保留区块哈希、处理 removed/重组。SDK 不运行持久索引、数据库、节点或保证最终确认。
+
+原 `AddClient` 保留 BSC 三个 v12/v13 Portal，主地址 `0xf58b88C2C263e49737BA92a73D3F5d53480Bd0d4`。旧阶段 `launch`、费用 `feeBNB`、事件查询 `(portal, fromBlock, toBlock)`；新 V1 为 `active`、`nativeFee`、`(fromBlock, toBlock)`。BSC 旧 `0x5247…` 与 ETH 新 V1 地址相同但链/字节码/ABI 不同，不能仅凭地址判链。0.1.0 原包保持不变。
+
+资料签名/图片上传、vanity 盐搜索预留、业主管理和外盘 DEX 交易不在自动流程。rebase、reflection、转账方额外扣款资产不宣传支持。字节码核对和本地测试不等于第三方独立审计。
+
+## 错误与构建
+
+`AddSdkError.code` 区分 `WRONG_CHAIN`、`CODE_MISMATCH`、`BINDING_MISMATCH`、`BLOCK_CHANGED`、`UNREGISTERED_TOKEN`、`INVALID_QUOTE`、`STALE_QUOTE`、`INVALID_DEADLINE` 等检查，ethers/节点错误也可能透传。失败时显示真实原因，需要时重报确认，不变成零价格或自动发替代交易。
+
+```sh
+npm install --ignore-scripts
+npm test
+npm pack
+```
+
+独立解压源码包可安装开发依赖后构建测试；私有项目使用锁文件并运行 `node scripts/sync-sdk.cjs --check`，另有真实 Solidity 本地 EVM 集成测试。公开包只有 SDK 自身源码、接口和公开部署绑定，不含平台前后端、Solidity 实现、私密配置或密钥。
+
+## 创建接口
+
+只生成当前已核验工厂的**未签名**请求，不自动搜索 vanity 盐、预留地址、上传图片资料、签名或首次买入。
+
+- `readCreationDomain(mechanismId, options?)`、`predictToken(mechanismId, salt, options?)`：工厂、模板、CREATE2 域和预测地址。两链 ID 为 `variable-v1`、`auto-tax-v1`、`staking-tax-v2`。
+- `buildCreateToken(mechanismId, account, launch, { tax?, staking? })`：标准/税收/税入矿池发行。发行量为 18 位最小单位；bytes32 salt 前 20 字节必须是创建钱包，未占用预测地址末尾 1111。显式传募集币、当前 `targetNative` / `quoteTarget`、deadline、默认/自定义模式。默认值或募集币报价变化后重新准备；可选 metadataURI 不会由此上传。
+- 税率、分配以整数百分比编码成 BPS，1%=100。买卖至少一边大于 0，四项合计 10000；原生/本币奖励模式不填自定义奖励币。分红最低 10000 枚。关联质押选本币/LP/自定义本金，周期 1～360 天，矿池接营销分配。
+- `buildPoolCreationApproval(account, rewardToken, amount)`：向当前单独 V2 工厂授权精确首存奖励。
+- `buildCreateStakingPool(account, params)`：预付 ERC20 奖励、本金资产、产出时间、可选有限次数减半与独立本金锁仓；原生本金为 ZeroAddress，预付原生奖励使用包装币 ERC20。按实际到账入账。
+- `buildCreateCyclePool(account, params)`：1～360 天循环、原生/ERC20 本金与奖励，可填 0 首存。原生首存用 value，ERC20 首存需授权工厂。
+
+所有涉及转入 ERC20 的资金请求均要求**先确认精确授权，再构建并模拟资金交易**。授权允许填 0 清零/撤销，USDT 等可能需要先清零再授权；Gas 预算另留。税处理请求设置 3500000 Gas 上限，满足合约起始 Gas 条件；这是上限，不是实际消耗。
+
+```ts
+import { ZeroAddress, parseUnits } from 'ethers';
+
+// PREPARED_SALT 由独立的创建者绑定 vanity 准备流程提供。
+const expectedAddress = await add.predictToken('variable-v1', PREPARED_SALT);
+const target = await add.getLaunchTarget(ZeroAddress);
+const creation = await add.buildCreateToken('variable-v1', WALLET_ADDRESS, {
+  name: 'Example', symbol: 'EX', supply: parseUnits('1000000', 18),
+  salt: PREPARED_SALT, expectedAddress, quoteAsset: ZeroAddress,
+  targetNative: target.targetNative, quoteTarget: target.quoteTarget,
+  deadline: BigInt(target.timestamp + 300), customTarget: false,
+});
+await add.simulate(creation);
+// 应用另外请求用户钱包确认和提交。
+```
+
+[公开绑定清单](https://add.fun/sdk/deployments.json) 列出 SDK 该版本审核的两链 Portal、工厂、模板和矿池绑定，不是任意替换后仍可信的授权。买入请求设 6000000 Gas 上限以容纳毕业尝试，实际消耗可能更低。

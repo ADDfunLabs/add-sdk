@@ -1,96 +1,48 @@
-# How ADD.fun works
+# How ADD works — current new V1
 
-[中文](how-add-works.zh-CN.md) · [SDK quick start](../README.md) · [Website](https://add.fun/) · [Full platform documentation](https://add.fun/docs/en/)
+Updated 8 October 2026. [Full docs](https://add.fun/docs/en/) · [SDK reference](https://add.fun/sdk/reference.html).
 
-ADD.fun is a token launchpad on **BNB Smart Chain mainnet (chain ID 56)**. During the launch market, a token has a fixed exchange rate against its selected fundraising asset. Additional buys move the launch toward its target without moving up a rising launch-price curve.
+ADD supports BSC (56) and Ethereum (1) with independent contracts and assets. Graduation uses PancakeSwap V2 on BSC and Uniswap V2 on ETH. BSC new V1's default reference is a constant **4 BNB**; ETH initially **1 ETH**, changeable by the owner for future launches. Existing projects retain their own recorded targets.
 
-The current default graduation target is **1 BNB**. A creator can choose a custom target. Each token keeps the target fixed at its creation; changing the default for future launches does not change existing tokens.
+## Inventory, trades and graduation
 
-This overview describes the current standard launch flow as of **16 September 2026**. Read the actual token state and applicable mechanism before integrating.
-
-## 1. Create a launch
-
-A creator chooses the token details, fundraising asset, target and supported token mechanism on [ADD.fun](https://add.fun/). Supported fundraising assets include BNB, BSC USDT and compatible custom assets that pass the platform's asset and routing checks.
-
-For a standard launch, the token supply is **1 billion**:
-
-- **500 million** tokens are available in the launch market.
-- **500 million** tokens are reserved for liquidity at full automatic graduation.
-
-The token is bound to a Portal, which records its target, asset, inventory and reserves. Existing tokens remain attached to their original Portal when a new Portal becomes the website default. A shared Portal accounts for each token separately; its total contract balance is not the reserve balance of any one token.
-
-## 2. Trade at the fixed launch exchange rate
-
-The launch price, expressed in the fundraising asset per whole token, is:
+Supply is chosen by the creator, not universally one billion. Actual admitted inventory is split into equal integer sale and liquidity halves; an odd smallest unit is surplus. Native, USDT or compatible custom quote assets require the contract's precision and wrapped-native V2 route checks.
 
 ```text
-fixed launch price = token's fundraising target / 500,000,000 tokens
+fixed launch exchange rate = recorded quote target / sale allocation
 ```
 
-For a standard **1 BNB** target, that is **0.000000002 BNB per token**, before the launch trading fee. Buying 1,000,000 tokens therefore requires 0.002 BNB of principal; the gross BNB payment also covers the platform fee. Use on-chain quotes for executable amounts and rounding.
+Pricing is fixed relative to the fundraising asset, not native conversion rates, USD or DEX prices. Inner buyers pay native BNB/ETH and sellers receive it; non-native quote assets are converted. Actual native settlement charges 1%. A zero-transfer-tax token still pays this inner fee.
 
-Buys increase net tokens sold and reserves. Sells reduce them. Both use the same fixed launch exchange rate, with a **1% BNB platform fee** on executed launch-market buys and sells. A zero-transfer-tax token still pays this platform trading fee. The current launch flow has no separate ADD creation or automatic-graduation fee; network gas applies.
+Graduation is attempted when unsold inventory is **strictly below 1% of total admitted inventory**. For an even inventory, more than 98% of the sale half has sold. Actual reserves and the liquidity half are added to V2; collecting the full reference target is not required. Excess payment is refunded to the last buyer, unsold tokens stay in the Portal, and received LP goes to the dead address. Successful graduation closes inner trading.
 
-Users pay and receive **BNB** at the launch Portal. For a non-BNB fundraising asset, the Portal converts between BNB and the selected asset through PancakeSwap V2. The token's launch exchange rate in the fundraising asset stays fixed, while the BNB conversion rate can move. Fixed launch pricing does not fix USD values or post-graduation market prices.
+Failed liquidity preserves the last settled buy, fee and excess-payment refund, pauses inner trading and protects reserves. Anyone can retry original graduation. The owner may attempt a protected alternative asset settlement, which rolls back if unsuccessful, or permanently enable proportional refunds. Holders return launched tokens for original quote reserves; previous fees are not refunded, and refund exits add no platform fee. Refund mode abandons graduation.
 
-For a remaining-supply purchase, the SDK can prepare a maximum BNB payment with a buffer of up to **3%**. The Portal settles the actual launch execution and refunds unused BNB. Quotes do not reserve inventory. The older v12 Portal may take its DEX path if another transaction graduates the token first; see the [SDK's remaining-buy limitations](../README.md#buy-the-complete-remaining-launch-supply).
+## Taxes, dividends and mining
 
-## 3. Graduate into PancakeSwap V2
+Buy/sell rates are separate and fixed at creation; whole percentages 0–10, at least one positive side. Taxes begin after graduation. Wallet transfers are exempt; recognized V2 pool transfers can include manual adding/removing liquidity. Platform automatic liquidity operations are exempt.
 
-Full automatic graduation occurs when net launch sales reach 500 million tokens and reserves cover that token's fixed target. The target amount of fundraising assets and the 500 million reserved tokens are added to the corresponding PancakeSwap V2 pair. Native BNB is wrapped as WBNB for the pair.
+Four allocations split already collected tax and total 100%:
 
-**All LP tokens received by ADD are sent to the dead address.** Graduation completes atomically or the transaction reverts. After graduation, trading follows the DEX pool's market price and applicable DEX/token fees.
+- Marketing to the chosen recipient or linked mining pool.
+- Burn transfers launched tokens to the dead address, without reducing ERC20 totalSupply.
+- Dividends create an independent per-token ledger when allocation is positive: native, specified ERC20 or self rewards, with at least 10000-token eligible holding. Earned rights are claimed; this is not a 50-address payout loop.
+- Liquidity adds V2 reserves; received LP goes to the dead address.
 
-```mermaid
-flowchart LR
-  A[Create token and lock target] --> B[Fixed-price launch market]
-  B --> C{Net sales and reserves meet target?}
-  C -->|Not yet| B
-  C -->|Yes| D[Add liquidity to PancakeSwap V2]
-  D --> E[Send received LP tokens to dead address]
-  E --> F[DEX trading at market prices]
-```
+Accumulated token tax is processed by qualifying later sells or public processTaxes, subject to price, Gas and threshold conditions. Initial threshold is supply × 0.001%, halved every 365 days after graduation with a smallest-unit floor; per-call cap remains supply × 0.01%. No immediate payout is promised on every trade. Anyone may pay Gas for claimFor(holder), but the reward goes to that holder.
 
-The Portal also has an owner-triggered **early graduation** path using the token's current reserves and a proportional token amount; unused inventory goes to the dead address. Integrators must use the token's phase and actual graduation events, rather than requiring a 100% progress display.
+Linked mining uses marketing allocation, not an additional tax. The factory binds self-token, LP or custom principal; graduation activates actual settlement/pair bindings before mining liabilities. Staking, claiming or checkpointing recognizes new income. Mid-cycle receipts spread over remaining time; fresh income after an ended cycle starts the same 1–360 day duration. Already earned, unclaimed rewards are never reset.
 
-## 4. Choose a standard token mechanism
+## Staking V2 and authority
 
-**Zero-transfer-tax tokens:** the token itself has no transfer tax. Launch-market platform fees and later DEX fees still apply.
+Standalone pools offer prepaid rewards with optional finite halvings, or cycling funding. Flexible, cliff or equal-batch principal rules are fixed at creation; each deposit has its own clock. Rewards remain claimable while principal is locked. No stakers pauses reward active time, while principal wall-clock unlocking continues. Actual receipts govern accounting. Claims charge 1% of the reward asset to the fixed maintenance recipient; principal withdrawal has no platform fee.
 
-**Standard tax tokens:** buy and sell tax rates are set separately at creation and then fixed. The website accepts whole percentages from 0% to 10% per side and requires at least one side to be nonzero. Token taxes activate after graduation. Wallet-to-wallet transfers are untaxed; transfers into or out of the bound trading pool can be taxed, including manual liquidity additions/removals. Platform automatic liquidity processing is exempt.
+Staking V2 has no owner, upgrade or rescue entry. It distributes only its configured reward asset, not other dividends attached to principal. Rebasing, reflection and sender-extra-debit assets are not advertised as compatible.
 
-Collected token tax is allocated among four destinations, totaling **100% of that collected tax**:
+New V1 Portal owner manages factory admission, new custom/external admission switches and recovery, and can withdraw only **unprotected surplus**. Active/refund reserves are protected. Factory removal affects new admission, not existing bindings. Ownership transfers require acceptance; the Portal is not upgradeable. [Full permissions](https://add.fun/docs/en/permissions/).
 
-- **Marketing:** proceeds go to the designated marketing wallet.
-- **Burn:** allocated launched tokens go to the dead address. This transfer does not reduce the ERC-20 `totalSupply` value.
-- **Holder rewards:** eligible holders receive the configured reward asset, which can be BNB, a specified token or the launched token itself. The website defaults to a 10,000-token minimum holding requirement and does not accept a lower setting.
-- **Liquidity:** allocated funds support automatic liquidity addition; newly received LP tokens go to the dead address.
+## SDK and legacy boundaries
 
-These allocations divide tax already collected; they are not four additional trading tax rates. Rewards depend on eligible holdings, collected funds and processing. Dividend rounds use a recorded budget and a cursor, process at most 50 addresses per call, and retain new rewards for later rounds. Processing can be triggered by eligible trades or public maintenance calls. There is no guaranteed payout amount or daily schedule.
+SDK 0.2.0 uses AddV1Client with explicit chain ID for reads/quotes and unsigned trade/refund/creation, tax processing, dividends and staking V2. The application provides RPC, confirmed approvals, wallet signing/submission and reorganization handling. No SDK keys or broadcast. Metadata hosting, vanity preparation and DEX trading are separate.
 
-Future external mechanisms require separate review and registration; their rules must not be inferred from these standard mechanisms.
-
-## 5. Integrate using ADD SDK
-
-[ADD SDK v0.1.0](https://github.com/ADDfunLabs/add-sdk/releases/tag/v0.1.0) provides TypeScript / JavaScript tools for:
-
-- Reading token state, Portal binding, targets, reserves and graduation phase.
-- Obtaining buy, sell and complete-remaining-supply quotes.
-- Preparing exact approvals and unsigned trades, and simulating transactions.
-- Decoding and querying Portal creation, trade, settlement and graduation events.
-
-The application provides its own RPC, wallet signing, broadcasting, confirmations and durable indexing. Version 0.1.0 does not implement complete token creation, administration, reward processing or DEX execution after graduation. See the [English API reference](https://add.fun/sdk/reference.html) and [examples](../examples/).
-
-## 6. Platform permissions and disclosures
-
-The shared Portal is **not upgradeable**, but it retains platform-owner powers. These include configuring defaults for future launches, managing compatible mechanisms and recipients, early graduation, and emergency recovery. The owner can permanently stop a Portal and then withdraw its assets, **including launch reserves and unsold inventory**. Sending LP or token ownership to a dead address does not remove the Portal owner's powers.
-
-Read the [full permission disclosure](https://add.fun/docs/en/permissions/) and [contract address reference](https://add.fun/docs/en/contracts/). Public SDK source, tests and deployment checks do not constitute an independent security audit. This repository publishes the SDK, explanatory documentation and official brand assets; it does not publish the platform's complete application or contract source.
-
-## Official links
-
-- Platform: https://add.fun/
-- Platform docs: https://add.fun/docs/en/
-- SDK docs: https://add.fun/sdk/
-- X: https://x.com/ADDfunLabs
-- Telegram: https://t.me/ADD_FU
+AddClient/0.1.0 remain historical BSC v12/v13 compatibility. Those old targets and owner powers follow old contracts; do not apply new V1 explanations to old tokens. Public source/runtime checks are not an independent audit. This repository contains SDK code, explanations and brand assets, not the complete platform or private deployment configuration.

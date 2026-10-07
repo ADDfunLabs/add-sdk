@@ -1,130 +1,112 @@
 # ADD SDK
 
-[![ADD — Fixed price. Clear launch rules.](assets/brand/add-social-preview.png)](https://add.fun/)
+Official TypeScript / JavaScript toolkit for ADD **new V1 on BSC and Ethereum**, staking V2 and per-token dividends. **0.2.0** includes SDK source, types, ESM and CommonJS. It reads contracts and prepares unsigned transactions; it never stores private keys, requests signatures or broadcasts.
 
-Official TypeScript / JavaScript SDK for the ADD.fun launch market on **BNB Smart Chain mainnet (56)**. Version **0.1.0**.
+- BSC mainnet, chain ID **56**: native BNB; graduation to PancakeSwap V2.
+- Ethereum mainnet, chain ID **1**: native ETH; graduation to Uniswap V2.
+- `AddV1Client` uses new V1. `AddClient` remains the historical BSC v12/v13 client. Choose the protocol explicitly: changing a Portal address does not convert its ABI.
 
-[中文](README.zh-CN.md) · [How ADD works](docs/how-add-works.md) · [API documentation](https://add.fun/sdk/reference.html) · [Release](https://github.com/ADDfunLabs/add-sdk/releases/tag/v0.1.0) · [Brand assets](assets/brand/) · [Token contract sources](https://github.com/ADDfunLabs/add-token-contracts)
-
-## About ADD.fun
-
-ADD is a BSC token launchpad with a **fixed exchange rate during the launch phase**, denominated in each token's selected fundraising asset. More buys advance the launch toward its target without moving up a rising launch-price curve.
-
-- **1 BNB current default target**, with custom targets available to creators. Existing token targets remain fixed.
-- **BNB, USDT and compatible custom fundraising assets**, with BNB payments and proceeds at the launch Portal.
-- **Automatic graduation to PancakeSwap V2** when the launch meets its target; all LP tokens received by ADD go to the dead address.
-- **Standard zero-transfer-tax and post-graduation tax mechanisms**, with their fees and permissions explained in the [platform overview](docs/how-add-works.md).
-
-Fixed pricing applies in the fundraising asset. Conversion rates and post-graduation prices can move. The non-upgradeable Portal retains owner management and emergency recovery powers; read the [permission disclosure](https://add.fun/docs/en/permissions/).
-
-Official links: [Website](https://add.fun/) · [Platform docs](https://add.fun/docs/en/) · [SDK docs](https://add.fun/sdk/) · [X](https://x.com/ADDfunLabs) · [Telegram](https://t.me/ADD_FU)
+[Platform docs](https://add.fun/docs/en/) · [API reference](https://add.fun/sdk/reference.html) · [中文](https://add.fun/sdk/zh.html) · [GitHub](https://github.com/ADDfunLabs/add-sdk)
 
 ## Install
 
+Node.js 20 or newer. Distributed from the official website and GitHub; **not yet published to the npm registry**.
+
 ```sh
-npm install https://add.fun/sdk/releases/add-fun-sdk-0.1.0.tgz
+npm install https://add.fun/sdk/releases/add-fun-sdk-0.2.0.tgz
 ```
 
-The package name is `@add-fun/sdk`. Version 0.1.0 is available from the official website and [GitHub Releases](https://github.com/ADDfunLabs/add-sdk/releases/tag/v0.1.0); it is not yet published on the npm registry. Both ESM and CommonJS, TypeScript declarations, source and examples are included. Node.js 20+ or a modern browser bundler with BigInt support is required. The only runtime dependency is ethers v6.
+Verify the download against [release.json](https://add.fun/sdk/release.json) or its `.tgz.sha256` file. The manifest includes version, SHA-256, npm integrity and the allowlisted file inventory. Do not obtain trust pins from token metadata.
 
-The published v0.1.0 package and tag are immutable release snapshots. Repository documentation and brand assets may advance independently on `main`; this documentation update does not replace the released archive.
-
-## Read a token and quote a buy
+## Quick start
 
 ```ts
-import { JsonRpcProvider, parseEther, formatUnits } from 'ethers';
-import { AddClient } from '@add-fun/sdk';
+import { JsonRpcProvider, parseEther } from 'ethers';
+import { AddV1Client } from '@add-fun/sdk';
 
-const provider = new JsonRpcProvider(process.env.BSC_RPC_URL);
-const add = new AddClient(provider);
-const token = '0x71be68c0bd800de27f1d48de4876215ed3c21111';
-const state = await add.readToken(token);
-console.log(state.portal, state.phase, formatUnits(state.target, state.quoteDecimals));
-if (state.phase === 'launch') {
-  const quote = await add.quoteBuy(token, parseEther('0.01'));
-  console.log(formatUnits(quote.outputAmount, state.decimals), quote.feeBNB);
+const add = new AddV1Client(new JsonRpcProvider(RPC_URL), { chainId: 1 });
+const token = await add.readToken(TOKEN_ADDRESS);
+console.log(token.name, token.phase, token.quoteAsset, token.quoteTarget);
+
+if (token.phase === 'active' && token.reviewed) {
+  const quote = await add.quoteBuy(token.token, parseEther('0.01'));
+  const request = await add.buildTrade(quote, WALLET_ADDRESS, {
+    deadline: BigInt(quote.timestamp + 300), slippageBps: 50,
+  });
+  await add.simulate(request);
+  // Your application reviews the request and asks the wallet to sign/send.
+  // The SDK does neither. Requote if state changes or submission is delayed.
 }
 ```
 
-Use your own BSC RPC endpoint. The SDK does not configure a private RPC key or depend on ADD's website RPC proxy. Reads are pinned to one numbered block with a hash check after completion; unavailable data and hash mismatches fail instead of being converted into zeroes. RPC providers may have stricter request/range limits. A trusted RPC is still required.
+Use `{ chainId: 56 }` and a BSC provider for BSC. Wallet connection, switching and final submission belong to the application. Simulation reflects one block; it does not guarantee future execution.
 
-## Prepare a wallet transaction
+## Units and quotes
 
-```ts
-const quote = await add.quoteBuy(token, parseEther('0.01'));
-const tx = await add.buildSwap(quote, connectedWalletAddress, {
-  deadline: BigInt(quote.timestamp + 300),
-  slippageBps: 50, // 0.5%
-});
-await add.simulate(tx); // eth_call; does not broadcast or spend gas
-// Present the original quote and transaction to the user for confirmation.
-// The application, not this SDK, decides when to call signer.sendTransaction(tx).
-```
+Amounts are **bigint in base units**. Native BNB/ETH use 18 decimals; token input/output use their own precision; `reserve` and `quoteTarget` use `quoteDecimals`. USDT precision differs between chains. `ZeroAddress` means native asset in target/creation inputs; wrapped native is an ERC20 and not an interchangeable approval target.
 
-`buildSwap` only accepts an unmodified quote from the **same client instance**. It checks chain, code, registration, current phase, canonical quote block and a maximum quote age of 120 seconds. Deadlines must be in the next 15 minutes. It retains the quote's input budget and minimum-output protection; it does not silently increase the user's spending limit. Gas, account balance, nonce and final signing belong to the caller. Simulation does not guarantee later execution.
+Reads pin related calls to one numbered block and recheck its canonical hash. Quotes include chain, block/hash/time and pool identity. A builder accepts only the original frozen quote issued by the **same client**, not a copied or JSON-restored object. Quotes expire after 120 seconds of block time. Deadlines must be after the current block and within 15 minutes.
 
-For a sell, call `readAllowance`, prepare `buildApproval(token, account, amount)` if needed, have the user sign that exact-amount approval and wait for confirmation. Then request a fresh sell quote with `quoteSell`, call `buildSwap`, simulate again and obtain separate user confirmation. A sell sends `value: 0n`. The approval spender is always the token's own supported Portal; no unlimited allowance is generated.
+Ordinary trade slippage is an integer 0–1000 BPS, default 50 (0.5%). Remaining-supply buys have a separately bounded 0–300 BPS payment buffer, default 300 (3%). The Portal refunds final excess native payment. Builders preserve original input/minimum output and check current phase, price boundaries, balance and allowance. No SDK method routes graduated tokens through the inner market.
 
-## Buy the complete remaining launch supply
-
-```ts
-const quote = await add.quoteRemainingBuy(token); // default buffer: 300 BPS = 3%
-const tx = await add.buildSwap(quote, connectedWalletAddress, {
-  deadline: BigInt(quote.timestamp + 300),
-});
-```
-
-`inputAmount` is the maximum BNB payment, at most 103% of `quotedPaymentBNB`, rounded down to wei. `outputAmount` is the full remaining token amount. The builder always uses that exact full output as the minimum, even if a slippage option is supplied. The Portal charges actual executed input and refunds unused BNB during an inner-market fill. The quote reconciles the conversion, fee and refund with the Portal's own `quoteBuy` result. A smaller wallet balance is not silently substituted.
-
-This is not a reservation. Another transaction may change inventory or graduate the token before inclusion. The current shared Portal rejects post-graduation swaps; the legacy v12 Portal can instead use its DEX path and spend the submitted budget. A remaining-fill refund is therefore not guaranteed across a phase change on that legacy Portal. Applications must disclose this and recheck before wallet submission.
+Confirm exact approval before simulating a sell or refund. Approval and trade are independent operations; re-read/rebuild after other transactions change state.
 
 ## Public API
 
-- `new AddClient(provider, { portals? })`: defaults to the three pinned public BSC deployments. A custom `portals` array replaces these trust pins and is for separately reviewed deployments or local test adapters only. Do not populate it from token metadata or arbitrary user input.
-- `readToken(token, { blockTag? })`: returns name, symbol, bound Portal, version, phase, fixed fundraising asset/target/route/pair, reserves, sold supply, remaining supply, fee recipient and recovery state. `progressBps` is the reserve/target ratio in basis points during launch and `null` after launch; use `phase`, not progress, to recognize manual graduation.
-- `getLaunchTarget(quoteAsset?, portal?, { blockTag? })`: reads the current default target and precision. Native BNB is `ZeroAddress`; the current primary Portal is the default. It does not hardcode 1 BNB into future launches.
-- `quoteBuy(token, paymentBNB, { blockTag? })`: input is gross BNB in wei; returns actual token output, BNB principal, fee and refund.
-- `quoteSell(token, tokenAmount, { blockTag? })`: input is raw token units; output is net BNB in wei. `principalBNB` is the gross BNB proceeds before the platform fee.
-- `quoteRemainingBuy(token, { blockTag?, bufferBps? })`: exact remaining fill, buffer integer 0..300.
-- `buildSwap(quote, account, { deadline, slippageBps? })`: unsigned transaction; ordinary slippage integer 0..1000 BPS, default 50.
-- `buildApproval(token, account, amount)`: exact ERC-20 approval for an active launch token.
-- `readAllowance(token, account)`: allowance and balance at one block.
-- `simulate(transaction)`: returns raw `eth_call` result; never sends a transaction. Simulate a sell after its approval confirms.
-- `decodePortalLog(log)`: decodes known Portal events, or returns `null` for foreign/unknown/malformed logs. Decoding alone does not prove receipt success or chain finality.
-- `getPortalEvents(portal, fromBlock, toBlock)`: queries an explicit inclusive range of at most 2,000 blocks, starting no earlier than the deployment. Reduce the range if your RPC limits it.
-- `minimumOutput`, `remainingBuyBudget`, `tokenPageUrl`, `pancakeSwapUrl`: validated utilities.
-- `BSC_PORTALS`, `PRIMARY_PORTAL`, `CHAIN_ID`, `PORTAL_ABI`, `TOKEN_ABI`: public deployment pins and limited integration interfaces. ABI events/errors preserve contract names; no owner transaction helpers are included.
+### Market
 
-Amounts are **bigint**, never JavaScript floating-point numbers. Token amounts use the token precision; reserve/target use `quoteDecimals`; BNB values always use 18 decimals. Serialize BigInt explicitly, for example `JSON.stringify(data, (_, v) => typeof v === 'bigint' ? v.toString() : v)`.
+- `new AddV1Client(provider, { chainId, deployment? })`: committed chain-specific runtime pins. A complete override is for separately reviewed deployments/local fixtures, never arbitrary user metadata.
+- `readToken(token, { blockTag? })`: metadata, inventory split, reserve/target denominations, phase, factory/creator/pair, current fee recipient, reviewed mechanism. Unknown external pools may be inspected; fund-moving builders reject them.
+- `getLaunchTarget(quoteAsset?, { targetNative?, blockTag? })`: current default/custom target and quote-asset amount; existing targets are locked snapshots.
+- `quoteBuy(token, paymentNative, options?)`, `quoteSell(token, amount, options?)`, `quoteRemainingBuy(token, options?)`, `quoteRefund(token, amount, options?)`.
+- `buildTrade(quote, account, { deadline, slippageBps? })`: unsigned buy/sell/refund; `buildSwap` and `buildRefund` are dedicated variants.
+- `buildApproval(token, account, amount)` and `readAllowance(token, account, options?)`: exact approval/balance for this Portal, including eligible refunds.
+- `simulate(request)`: `eth_call` of an unchanged request issued by this client; no Gas payment or broadcast.
+- `decodePortalLog(log)` and `getPortalEvents(fromBlock, toBlock)`: this Portal only, inclusive ranges of at most 2000 blocks. Providers may require smaller ranges.
 
-## Indexing and GMGN integration
+### Taxes and dividends
 
-The current primary Portal is `0xf58b88C2C263e49737BA92a73D3F5d53480Bd0d4`, start block `122016858`. Older tokens stay on their original Portals. The SDK resolves each token's `factory()` and checks registration and the Portal's pinned runtime code. Changing the website primary does not change old token bindings. Discovery directory: https://add.fun/api/v1/portals . Full address notes: https://add.fun/docs/en/contracts/ . New deployments require reviewed SDK pins, not blind trust in a remote directory.
+- `readTax(token, options?)`: fixed allocation, registered dividend/mining addresses, threshold and pending balances.
+- `buildProcessTaxes(token, account)`: public processing for a graduated reviewed token. Contract thresholds and price/execution protections still apply; no payout is guaranteed.
+- `readDividend(token, { account?, blockTag? })`: independent ledger, reward asset, minimum holding, total funded/claimed and holder claimable amount.
+- `buildDividendClaim(token, gasPayer, { unwrapNative?, holder? })`: own claim or `claimFor(holder)`. A third-party Gas payer cannot redirect rewards. `claimFor` pays the holder in ERC20/wrapped units; unwrapping is available only for own native-reward claims.
 
-Index these events from each supported Portal:
+### Staking V2
 
-- `TokenSaleCreated`: token, creator, optional initial purchase and metadata reference.
-- `QuoteConfigured`: actual reserve asset, precision and target. The legacy field name `default18BNB` in `LaunchProfile` means “created using default mode” in v13, not necessarily 18 BNB.
-- `BuyEvent` / `SellEvent`: BNB trading amounts, token amounts and platform fee. `feeToFactory` is a legacy name; actual fees go to the Portal's current `feeRecipient`. For the gas-paying trader, use a successful transaction receipt's `from`, rather than inferring it from ERC-20 transfers.
-- `QuoteSettlement`: for non-native launches, separates reserve-asset amounts from BNB principal. Do not confuse their units.
-- `LiquidityAdded`: graduation pair and LP result. `ethAmount` can be a non-BNB reserve-asset amount; use the token's fundraising asset and precision.
-- `ManualGraduation`: owner-triggered early graduation; do not wait for 100% progress to detect it.
+- `readStakingPool(pool, { account?, blockTag? })`: registered factory/clone, assets, cycle, schedule, account reward and principal locks; pending linked pools expose graduation-waiting state.
+- `readStakingPositions(pool, account, { offset?, limit?, blockTag? })`: paginated independent deposits.
+- `readStakingAllowance` / `buildStakingApproval`: `{ purpose?: 'stake' | 'fund' }` selects principal/reward asset. Exact approval to the verified pool; native assets need no ERC20 approval.
+- `buildStake(pool, account, amount, { minimumReceived? })`: actual receipt determines principal; optional minimum defaults to zero.
+- `buildWithdraw(pool, account, amount, { receiver?, unwrapNative? })`: unlocked principal only, no platform principal fee.
+- `buildStakingClaim(pool, account, { receiver?, wrappedReward? })`: rewards, with the contract's fixed 1% fee in the reward asset.
+- `buildCheckpoint(pool, account)`: recognize incoming cycling funds/linked activation. If activation is required, confirm checkpoint and re-read final LP/reward bindings before building a stake.
+- `previewAddRewards(pool, assumedReceived, 'extend' | 'recalculate', options?)` / `buildAddRewards(pool, account, amount, { mode?, minimumReceived? })`: prepaid funding modes or cycling funding as supported by the pool. A preview is not a receipt promise.
 
-Persist `(chainId, transactionHash, logIndex)` identities, use confirmed/finalized blocks, verify receipt success and handle chain reorganizations. The decoder preserves `removed`; callers must invalidate removed logs and roll back their own derived records. The SDK does not run a database, maintain a durable cursor or promise finality. After graduation, obtain DEX quotes/data directly from PancakeSwap and your market-data stack; the SDK will not route new DEX trades through ADD.
+Types, public ABI maps and `V1_DEPLOYMENTS` are exported. Use `*_ABIS[chainId]` for chain-specific tuple names; `*_ABI` aliases use BSC. Owner, internal and initialization mutators are omitted. A public ABI alone is not a hosted token-creation workflow.
 
-## Mechanism and trust boundaries
+## Current deployments and mechanics
 
-The launch exchange rate is fixed **relative to the fundraising asset**, not USD or every other asset. The current default is 1 BNB, but the owner can change defaults for future launches and creators can choose a custom target. Existing token targets are fixed. Launch buys/sells pay a 1% BNB platform fee. A standard “zero-tax” token does not waive that fee. Non-BNB conversions can move in price. Standard tax tokens use the same untaxed token-transfer path before graduation; their token taxes start after graduation.
+- BSC new V1: `0x933bc9fe78c9beaedc5a82bd24b5359d01e8fd7b`, start block `125996705`. Default reference **4 BNB**, a constant in this deployment.
+- ETH new V1: `0x5247dD1586923176bF92FeA99aadD21cEDDbA0e5`, start block `26139958`. Initial default **1 ETH**; owner can change the default for later launches.
+- Each chain has separate standard, tax and tax-linked staking V2 factory/template pins. Retired staking V1 is not offered for new pools.
 
-The shared Portal is non-upgradeable. Its owner still retains management and emergency recovery powers, including permanently stopping the Portal and withdrawing reserves. See https://add.fun/docs/en/permissions/ . Code hash matching and local tests are not an independent security audit.
+The Portal splits actual received inventory equally between sale and liquidity. Pricing is fixed relative to the recorded fundraising asset. Graduation is attempted when unsold sale inventory is **strictly below 1% of total admitted inventory**, using actual reserves; collecting the reference target in full is not required. Inner trades charge 1% of actual native settlement. Zero transfer tax does not waive this fee.
 
-Version 0.1.0 covers reading, launch-market trading and Portal event integration. It does **not** implement hosted RPC service, image uploads, CA reservation/signing, one-click token creation, owner administration, reward processing or post-graduation swaps. The existing ADD website remains the token-creation interface. Later compatible external mechanisms may require their own review and SDK additions; no unlaunched mechanism is advertised as live.
+Failed graduation preserves the settled last buy, pauses inner trading and protects reserves. Anyone can retry original graduation; owner may attempt a protected alternative settlement or permanently enable proportional refunds in the original fundraising asset. Previous fees are not refunded. New V1 owner withdrawals are limited to **unprotected surplus**, not active/refund reserves. Factory admission, new-target/external-admission switches and ownership remain managed. Removing a factory does not change existing pools. These permissions differ from v12/v13.
 
-## Errors and recovery
+Taxes begin after graduation at fixed rates; wallet transfers are exempt. Tax tokens accrue before qualifying later sells/public processing handle them. Mining income uses marketing allocation, not an extra fifth tax. Dividends and staking rewards are claimed. Staking V2 has no owner, upgrade or rescue entry. [Permissions](https://add.fun/docs/en/permissions/).
 
-`AddSdkError.code` identifies SDK checks, including `WRONG_CHAIN`, `UNTRUSTED_PORTAL`, `CODE_MISMATCH`, `VERSION_MISMATCH`, `BLOCK_UNAVAILABLE`, `BLOCK_CHANGED`, `INVALID_AMOUNT`, `INVALID_QUOTE`, `QUOTE_CHANGED`, `STALE_QUOTE`, `INVALID_DEADLINE`, `PORTAL_IN_RECOVERY` and `EXTERNAL_TRADING_ONLY`. Underlying ethers/RPC errors can also propagate. Never convert failure into a zero price or automatically broadcast a replacement trade. Ask for a new quote/confirmation when parameters change.
+## Events and legacy compatibility
 
-## Build from source
+New V1 event names/units differ from historical `BuyEvent`, `TokenSaleCreated` and `swapExactInput`. Decode with the selected ABI. Index successful receipts by `(chainId, transactionHash, logIndex)`, retain block hashes and handle removed/reorganized logs. The SDK is not a durable indexer, database, RPC service or finality oracle.
+
+`AddClient` preserves the original three BSC v12/v13 pins, primary `0xf58b88C2C263e49737BA92a73D3F5d53480Bd0d4`. Legacy phase is `launch`, fee field `feeBNB`, event query `(portal, fromBlock, toBlock)`; new V1 uses `active`, `nativeFee` and `(fromBlock, toBlock)`. Historical BSC `0x5247…` shares an address with ETH new V1 on another chain; ABI, bytecode and pins differ. Never choose a chain solely by address.
+
+Original 0.1.0 downloads remain unchanged. Creator metadata signatures/upload, images, vanity salt search/reservation, administration and post-graduation DEX trades are outside this toolkit. Rebasing, reflection and sender-extra-debit assets are not advertised as supported. Runtime checks and local tests are not a third-party independent audit.
+
+## Errors and build
+
+`AddSdkError.code` distinguishes checks including `WRONG_CHAIN`, `CODE_MISMATCH`, `BINDING_MISMATCH`, `BLOCK_CHANGED`, `UNREGISTERED_TOKEN`, `INVALID_QUOTE`, `STALE_QUOTE`, `INVALID_DEADLINE`. ethers/RPC errors may also propagate. Show failures, requote and reconfirm when needed; never substitute zero prices or automatically broadcast replacement trades.
 
 ```sh
 npm install --ignore-scripts
@@ -132,8 +114,35 @@ npm test
 npm pack
 ```
 
-In a standalone extracted package, the commands above install development dependencies and rebuild/test the included source. In the ADD monorepo use the committed lockfile with `npm ci --ignore-scripts`; `node scripts/sync-sdk.cjs --check` checks interface/catalog drift. The monorepo also executes SDK-generated transactions against its real Solidity contracts on a local EVM. Real wallet submission and independent third-party audit are separate activities.
+An extracted SDK source package can install dev dependencies, build and test independently. The private monorepo uses lockfiles and `node scripts/sync-sdk.cjs --check`; integration tests execute generated requests against actual Solidity on a local EVM. Public packages contain SDK source/interfaces/public pins only, never platform frontend/backend, Solidity implementations, private configuration or keys.
 
-## License and brand
+## Creation requests
 
-SDK code and explanatory documentation are provided under the [MIT license](LICENSE). The ADD name and artwork follow the separate [brand asset notice](assets/brand/LICENSE). This public repository contains the SDK, documentation and official brand assets; platform application source, full contract source, deployment configuration and credentials are not included.
+Creation helpers prepare **unsigned** requests for current reviewed factories. They do not search vanity salts, reserve addresses, upload images/metadata, create a wallet signer or automatically make a first purchase.
+
+- `readCreationDomain(mechanismId, options?)` / `predictToken(mechanismId, salt, options?)`: reviewed factory, implementation, CREATE2 domain and prediction. IDs are `variable-v1`, `auto-tax-v1`, `staking-tax-v2` on each chain.
+- `buildCreateToken(mechanismId, account, launch, { tax?, staking? })`: standard/tax/linked token creation. Supply is raw 18-decimal units. Salt is bytes32 whose first 20 bytes equal the creator; the fresh expected address must end in `1111`. Provide the actual quote asset, current `targetNative` / `quoteTarget`, deadline and explicit default/custom mode. A changed default/asset conversion requires re-preparation. Metadata URI is optional and is not uploaded by this call.
+- Tax rates and allocation are integer percentages encoded in BPS: 1% = 100. At least one buy/sell side is positive and four allocations total 10000. Native/self reward modes use zero custom reward address; dividends require a minimum of 10000 whole tokens. Linked staking config chooses self/LP/custom principal and a 1–360 day cycle; its pool receives the marketing allocation.
+- `buildPoolCreationApproval(account, rewardToken, amount)`: exact reward approval to the current standalone V2 factory.
+- `buildCreateStakingPool(account, params)`: prepaid ERC20 rewards, principal asset, duration, optional finite halvings and independent principal lock. BNB/ETH principal uses ZeroAddress; prepaid native rewards use the wrapper ERC20. Initial actual receipt is authoritative.
+- `buildCreateCyclePool(account, params)`: cycle duration 1–360 days, native/ERC20 principal and reward, optional initial reward amount including zero. Native initial funds use transaction value; ERC20 initial funds require factory approval.
+
+For any ERC20 transfer builder, **confirm the exact approval first**, then build and simulate the fund-moving request. Approval helpers permit zero to revoke/reset allowances; tokens such as USDT may require a zero approval before a new nonzero allowance. Gas budget must be reserved separately. Process-tax requests set a 3,500,000 Gas limit because this contract requires substantial starting Gas; that is a limit, not the consumed amount.
+
+```ts
+import { ZeroAddress, parseUnits } from 'ethers';
+
+// PREPARED_SALT is supplied by your separate creator-bound vanity preparation.
+const expectedAddress = await add.predictToken('variable-v1', PREPARED_SALT);
+const target = await add.getLaunchTarget(ZeroAddress);
+const creation = await add.buildCreateToken('variable-v1', WALLET_ADDRESS, {
+  name: 'Example', symbol: 'EX', supply: parseUnits('1000000', 18),
+  salt: PREPARED_SALT, expectedAddress, quoteAsset: ZeroAddress,
+  targetNative: target.targetNative, quoteTarget: target.quoteTarget,
+  deadline: BigInt(target.timestamp + 300), customTarget: false,
+});
+await add.simulate(creation);
+// Application requests wallet confirmation/submission separately.
+```
+
+The [public deployment pins](https://add.fun/sdk/deployments.json) list the reviewed per-chain Portal, factories, implementations and staking bindings used by this SDK. This is a versioned integration catalog, not permission to trust arbitrary replacement entries. Buy requests set a 6,000,000 Gas limit to budget a possible graduation attempt; actual Gas usage may be lower.
